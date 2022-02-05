@@ -1,0 +1,934 @@
+
+nanoBoot.elf:     file format elf32-avr
+
+Sections:
+Idx Name          Size      VMA       LMA       File off  Algn
+  0 .data         00000000  00800100  00007fe2  00000256  2**0
+                  CONTENTS, ALLOC, LOAD, DATA
+  1 .text         000001e2  00007e00  00007e00  00000074  2**1
+                  CONTENTS, ALLOC, LOAD, READONLY, CODE
+  2 .stab         000009a8  00000000  00000000  00000258  2**2
+                  CONTENTS, READONLY, DEBUGGING
+  3 .stabstr      0000001c  00000000  00000000  00000c00  2**0
+                  CONTENTS, READONLY, DEBUGGING
+
+Disassembly of section .text:
+
+00007e00 <reset_vector>:
+    7e00:	f8 94       	cli
+    7e02:	22 24       	eor	r2, r2
+    7e04:	28 c0       	rjmp	.+80     	; 0x7e56 <__ctors_end>
+
+00007e06 <config_descriptor>:
+    7e06:	09 02       	muls	r16, r25
+    7e08:	22 00       	.word	0x0022	; ????
+    7e0a:	01 01       	movw	r0, r2
+    7e0c:	00 80       	ld	r0, Z
+    7e0e:	32 09       	Address 0x0000000000007e0e is out of bounds.
+.word	0xffff	; ????
+
+00007e0f <interface_descriptor>:
+    7e0f:	09 04       	cpc	r0, r9
+    7e11:	00 00       	nop
+    7e13:	01 03       	mulsu	r16, r17
+    7e15:	00 00       	nop
+    7e17:	00 09       	Address 0x0000000000007e17 is out of bounds.
+.word	0xffff	; ????
+
+00007e18 <hid_descriptor>:
+    7e18:	09 21       	and	r16, r9
+    7e1a:	11 01       	movw	r2, r2
+    7e1c:	00 01       	movw	r0, r0
+    7e1e:	22 15       	cp	r18, r2
+    7e20:	00 07       	Address 0x0000000000007e20 is out of bounds.
+.word	0xffff	; ????
+
+00007e21 <endpoint_descriptor>:
+    7e21:	07 05       	cpc	r16, r7
+    7e23:	81 03       	fmuls	r16, r17
+    7e25:	40 00       	.word	0x0040	; ????
+    7e27:	05 2a       	Address 0x0000000000007e27 is out of bounds.
+.word	0xffff	; ????
+
+00007e28 <USB_General_Vector>:
+    7e28:	2a 86       	std	Y+10, r2	; 0x0a
+    7e2a:	44 c0       	rjmp	.+136    	; 0x7eb4 <USB_General_ISR>
+
+00007e2c <USB_Endpoint_Vector>:
+    7e2c:	4f c0       	rjmp	.+158    	; 0x7ecc <USB_Endpoint_ISR>
+
+00007e2e <device_descriptor>:
+    7e2e:	12 01       	movw	r2, r4
+    7e30:	10 01       	movw	r2, r0
+    7e32:	00 00       	nop
+    7e34:	00 40       	sbci	r16, 0x00	; 0
+    7e36:	eb 03       	fmulsu	r22, r19
+    7e38:	67 20       	and	r6, r7
+    7e3a:	01 00       	.word	0x0001	; ????
+    7e3c:	00 00       	nop
+    7e3e:	00 01       	movw	r0, r0
+
+00007e40 <hid_report_descriptor>:
+    7e40:	06 dc       	rcall	.-2036   	; 0x764e <__FUSE_REGION_LENGTH__+0x724e>
+    7e42:	ff 09       	sbc	r31, r15
+    7e44:	fb a1       	ldd	r31, Y+35	; 0x23
+    7e46:	01 09       	sbc	r16, r1
+    7e48:	02 15       	cp	r16, r2
+    7e4a:	00 25       	eor	r16, r0
+    7e4c:	ff 75       	andi	r31, 0x5F	; 95
+    7e4e:	08 96       	adiw	r24, 0x08	; 8
+    7e50:	82 00       	.word	0x0082	; ????
+    7e52:	91 02       	muls	r25, r17
+    7e54:	c0 00       	.word	0x00c0	; ????
+
+00007e56 <__ctors_end>:
+main:
+; =================================================================
+; = Initialize constants
+; =================================================================
+      ; Set R3=rONE
+      clr         rONE                          ; Initialize rONE as 0 (application may have set this before RESET)
+    7e56:	33 24       	eor	r3, r3
+      inc         rONE                          ; Initialize rONE  (R3 register = one)
+    7e58:	33 94       	inc	r3
+
+      ; Create a copy of the MCUSR (MCU Status Register) as soon as possible
+      in          rMCUSR, _SFR_IO_ADDR(MCUSR)   ; Load MCU Status Register to rMCUSR
+    7e5a:	44 b6       	in	r4, 0x34	; 52
+      out         _SFR_IO_ADDR(MCUSR), rZERO    ; Load MCU Status Register with rZERO (clear reset flags, particularly clear WDRF in MCUSR), necessary before disabling the Watchdog
+    7e5c:	24 be       	out	0x34, r2	; 52
+
+      ; Use Y+ for different purpose with YH=R29 to 0 for addressing extended io for any 64 bytes of YL specified section
+      ; * WDT initialization routine:  YL=lo8(EIO_BASE)   --- (wdt_init) -- start and end of bootloader
+      ; * USB communication routine:   YL=lo8(USB_BASE)   --- (usb_init) -- main part of bootloader
+      clr         YH                            ; 0 = hi8(USB_BASE) = hi8(EIO_BASE) = 0  common initialization
+    7e5e:	dd 27       	eor	r29, r29
+
+      ; We MUST disable the Watchdog Timer first, otherwise it will remain enabled and will keep resetting the system, so...
+      ; Disable Watchdog Timer
+      mov         r17,  rZERO                   ; Load r17 with zero to disable the Watchdog Timer completely
+    7e60:	12 2d       	mov	r17, r2
+
+      rcall       set_watchdog_timer            ; Call the subroutine that sets the watchdog timer with the value loaded in r17
+    7e62:	a5 d0       	rcall	.+330    	; 0x7fae <set_watchdog_timer>
+
+; check_reset_flags:
+      sbrs        rMCUSR, EXTRF                 ; Skip the next instruction if EXTRF is set (if External Reset Flag, skip next instruction, go to run_bootloader)
+    7e64:	41 fe       	sbrs	r4, 1
+
+00007e66 <run_application>:
+
+run_application:                                ; We get here if the cause of the reset was anything but an Extenal Reset (push-button)
+      jmp         0                             ; Simply jump to 0x0000 (application) IMPORTANT NOTE!! This CANNOT be an 'rjmp'!!
+    7e66:	0c 94 00 00 	jmp	0	; 0x0 <__TEXT_REGION_ORIGIN__>
+
+00007e6a <run_bootloader>:
+
+run_bootloader:
+      set                                       ; Initialize BootLoaderActive flag (T flag in SREG)
+    7e6a:	68 94       	set
+
+; Enable LED
+#if defined(LED_ENABLED)
+      ; Set IO register as output for LED
+      ENABLE_LED_OUTPUT
+    7e6c:	56 9a       	sbi	0x0a, 6	; 10
+
+; Move the IRQ Vector Table to the beginning of the Boot Flash Space
+; ONLY if the BOOT_ADDRESS is not zero!
+
+#if (BOOT_ADDRESS != 0)
+      ldi         r17, _BV(IVSEL)               ; Load r17 with the value needed to set the Interrupt Vectors to the beginning of the Boot Loader section of the Flash
+    7e6e:	12 e0       	ldi	r17, 0x02	; 2
+                                                ; Set a logic one to the Interrupt Vector Select bit (IVSEL); for this to work, the Vector Change Enable bit (IVCE) MUST be set to logic zero!
+
+                                                ; Set a logic one to the Interrupt Vector Change Enable bit (IVCE)
+      out         _SFR_IO_ADDR(MCUCR), rONE     ; Store MCU Control Register (MCUCR) with the value needed to "unlock" the Interrupt Vector Change Configuration
+    7e70:	35 be       	out	0x35, r3	; 53
+      out         _SFR_IO_ADDR(MCUCR), r17      ; Store r17 to the MCU Control Register (MCUCR)
+    7e72:	15 bf       	out	0x35, r17	; 53
+      ; "Divide clock by 8" fuse (CKDIV8) to be set to any value (0 or 1), since
+      ; we are setting the clock prescaler to zero here, effectively setting the
+      ; System Clock to 16 MHz, which is one of the HW assumptions made for the
+      ; code to work as expected.
+
+      ldi         r17, _BV(CLKPCE)                ; Load r17 with the value needed to "unlock" the prescaler of the Clock; Clock Prescaler Change Enable bit (CLKPCE) set to one, all other bits set to zero.
+    7e74:	10 e8       	ldi	r17, 0x80	; 128
+                                                  ; still YH=0, YL=lo8(EIO_BASE)  initial routine
+      std         Y+oCLKPR, r17                   ; Store r17 to the Clock Prescaler Register (CLKPR)
+    7e76:	19 83       	std	Y+1, r17	; 0x01
+      std         Y+oCLKPR, rZERO                 ; Store rZERO to the Clock Prescaler Register (CLKPR), setting CLKPS3, CLKPS2, CLKPS1 and CLKPS0 to zero (Clock Division Factor = 1; System Clock is 16 MHz)
+    7e78:	29 82       	std	Y+1, r2	; 0x01
+; =================================================================
+; = USB Initialization
+; = Configure Y register to point to USB_BASE (UHWCON register)
+; =================================================================
+
+      ldi         YL, lo8(USB_BASE)             ; Load YL with the least significant 8 bits of USB_BASE (usb_init)
+    7e7a:	c7 ed       	ldi	r28, 0xD7	; 215
+      ; SIZE OPTIMIZATION: Instead of resetting just some specific bits, initialize the whole USBCON
+      ; register with its reset value (although even this could be omitted, this initialization is left
+      ; here in case the application tries to enter the bootloader in a slightly incorrect way).
+      ; As a further optimization, the USBCON register value is left in r16 for use in subsequent code
+      ; which modifies various bits of that register.
+      ldi         r16, _BV(FRZCLK)              ; Load r16 with the reset value for the USB Configuration Register (USBCON)
+    7e7c:	00 e2       	ldi	r16, 0x20	; 32
+      std         Y+oUSBCON, r16                ; Store r16 to the USB Configuration Register (USBCON)
+    7e7e:	09 83       	std	Y+1, r16	; 0x01
+
+      ; Enable USB Regulator (USB_REG_On)
+      ; UHWCON |=  (1 << UVREGE);
+                                                ; Set a logic one to the USB pad regulator bit (UVREGE)
+      std         Y+oUHWCON, rONE               ; Store USB Hardware Configuration Register (UHWCON) with the value needed to enable the USB pad regulator
+    7e80:	38 82       	st	Y, r3
+      ; std         Y+oUSBINT, rZERO              ; Load the USB General Interrupt Flag Register (USBINT) with zero (clear the IVBUS Transition Interrupt Flag (VBUSTI))
+      ; std         Y+oUDINT, rZERO               ; Load the USB Device Interrupt Flag Register (UDINT) with zero (clear all USB Device-related interrupts)
+
+      ; Enable the USB Controller
+      ; USBCON |=  (1 << USBE);
+      ori         r16, _BV(USBE)                ; The right value of USBCON is already in r16, just set the USB macro Enable Bit (USBE)
+    7e82:	00 68       	ori	r16, 0x80	; 128
+      std         Y+oUSBCON, r16                ; Store r16 to the USB Configuration Register (USBCON)
+    7e84:	09 83       	std	Y+1, r16	; 0x01
+
+      ; Set PLL Output Frequency to 48MHz
+      ; PLLFRQ = (1 << PDIV2);
+      ldi         r17, _BV(PDIV2)               ; Load r17 with the value needed to set the PLL Lock Frequency to 48MHz (only PDIV2 bit set to 1)
+    7e86:	14 e0       	ldi	r17, 0x04	; 4
+                                                ; The PLL Input Multiplexer (PMUX) bit is set to 0 because the PLL input is connected to the PLL Prescaler, which has the Primary System Clock as source
+                                                ; The PLL Postcaler for USB Peripheral (PLLUSB) is set to 0 because we don't need further division (PDIV2 set to 1 -> PLL Output = 48MHz)
+      out         _SFR_IO_ADDR(PLLFRQ), r17     ; Store r17 to the PLL Frequency Control Register (PLLFRQ)
+    7e88:	12 bf       	out	0x32, r17	; 50
+
+      ; Unfreeze USB Clk
+      ; USBCON &= ~(1 << FRZCLK);
+      andi        r16, ~(_BV(FRZCLK))           ; The right value of USBCON is already in r16, just clear the Freeze Clock bit (FRZCLK)
+    7e8a:	0f 7d       	andi	r16, 0xDF	; 223
+      std         Y+oUSBCON, r16                ; Store r16 to the USB Configuration Register (USBCON)
+    7e8c:	09 83       	std	Y+1, r16	; 0x01
+
+      ; Enable USB PLL (USB_PLL_On)
+      ; PLLCSR = (1 << PINDIV);
+      ; PLLCSR = ((1 << PINDIV) | (1 << PLLE));
+      ldi         r17, _BV(PINDIV)              ; Load r17 with the value needed to set the PLL input prescaler to generate the 8MHz input clock for the PLL
+    7e8e:	10 e1       	ldi	r17, 0x10	; 16
+                                                ; When using a 16MHz clock source, PINDIV PLL Input Prescaler (PINDIV) bit must be set to 1 before enabling PLL
+      out         _SFR_IO_ADDR(PLLCSR), r17     ; Store r17 to the PLL Control and Status Register (PLLCSR)
+    7e90:	19 bd       	out	0x29, r17	; 41
+
+      ldi         r17, (_BV(PINDIV) | _BV(PLLE)); Load r17 with the value needed to enable the PLL, set PLL Enable bit (PLLE), we are also setting PINDIV to keep the PLL input prescaler configuration
+    7e92:	12 e1       	ldi	r17, 0x12	; 18
+      out         _SFR_IO_ADDR(PLLCSR), r17     ; Store r17 to the PLL Control and Status Register (PLLCSR)
+    7e94:	19 bd       	out	0x29, r17	; 41
+
+00007e96 <wait_pll_lock>:
+
+      ; Wait for PLL Lock Detector to assert
+      ; while (!(USB_PLL_IsReady()));
+wait_pll_lock:
+      in          r17, _SFR_IO_ADDR(PLLCSR)     ; Load r17 with the value of the PLL Control and Status Register (PLLCSR)
+    7e96:	19 b5       	in	r17, 0x29	; 41
+      sbrs        r17, PLOCK                    ; Skip the next instruction if the PLL Lock Detector bit (PLOCK) is set (PLL is locked to the reference clock)
+    7e98:	10 ff       	sbrs	r17, 0
+      rjmp        wait_pll_lock                 ; Loop while PLOCK is not set
+    7e9a:	fd cf       	rjmp	.-6      	; 0x7e96 <wait_pll_lock>
+
+      ; Enable ONLY "End Of Reset Interrupt"
+      ; UDIEN  |= (1 << EORSTE);
+      ; NOTE: We are not ORing the value of UDIEN, because we really just want EORSTE enabled
+      ldi         r17, _BV(EORSTE)              ; Load r17 with the value needed to enable the USB-related interrupts we care about, EORSTE
+    7e9c:	18 e0       	ldi	r17, 0x08	; 8
+      std         Y+oUDIEN, r17                 ; Store r17 to the USB Interrupt Enable Register (UDIEN)
+    7e9e:	1b 87       	std	Y+11, r17	; 0x0b
+
+      ; Attach device to USB Bus and select USB Full speed mode (also clears USB reset CPU bit <RSTCPU> and remote wake-up bit <RMWKUP>)
+      ; IMPORTANT!! The reset value of UDCON is not 0x00, it's 0x01 (DETACH bit = 1), so we MUST write ZERO to it here!!
+      ; UDCON  = 0;
+      std         Y+oUDCON, rZERO               ; Store rZERO to the USB Device Configuration Register (UDCON); clear Detach Bit (DETACH);
+    7ea0:	29 86       	std	Y+9, r2	; 0x09
+                                                ; This reconnects the device, and sets FULL SPEED Mode, LSM bit set to 0 (D+ internal pull-up)
+
+      ; Enable VBUS Pad (USB_OTGPAD_On), while keeping USB macro Enable bit set
+      ; USBCON |=  (1 << OTGPADE);
+      ldi         r16, (_BV(USBE)|_BV(OTGPADE)) ; Load r16 with the value needed to enable the USB controller, enable clock;
+    7ea2:	00 e9       	ldi	r16, 0x90	; 144
+                                                ; USB macro Enable Bit (USBE) is set to 1 (enable the USB controller)
+                                                ; Freeze Clock bit (FRZCLK) set to 0 (enable the clock inputs)
+                                                ; VBUS Pad Enable bit (OTGPADE) set to 1 (enable the VBUS pad)
+                                                ; VBUS Transition Interrupt Enable Bit (VBUSTE) set to 0 (disable the VBUS Transition interrupt generation)
+      std         Y+oUSBCON, r16                ; Store r16 to the USB Configuration Register (USBCON)
+    7ea4:	09 83       	std	Y+1, r16	; 0x01
+
+; =================================================================
+; = USB Initialization is NOW COMPLETE!!
+; =================================================================
+
+      sei                                       ; Set Global Interrupt Flag (Enable system interrupts)
+    7ea6:	78 94       	sei
+
+00007ea8 <main_loop>:
+; =================================================================
+; = Main Bootloader Loop
+; =================================================================
+
+main_loop:
+      brts        main_loop                     ; Loop while the T (BootLoaderActive) flag in SREG is set
+    7ea8:	fe f3       	brts	.-2      	; 0x7ea8 <main_loop>
+
+00007eaa <exit_bootloader>:
+      ; of _BV(DETACH) is 0x01, therefore we can just store rONE into UDCON.
+      ; In theory this step could even be removed completely, because the watchdog reset should set the
+      ; DETACH bit anyway, but doing this here ensures that the host detects the USB device detach before
+      ; the application is started, which could avoid issues if the application does not add some delay
+      ; before enabling USB.
+      std         Y+oUDCON, rONE                ; Store _BV(DETACH) (== 0x01) to the USB Device Configuration Register (UDCON)
+    7eaa:	39 86       	std	Y+9, r3	; 0x09
+
+#if defined(LED_ENABLED)
+      ; Turn LED off before exiting
+      TURN_LED_OFF
+    7eac:	5e 98       	cbi	0x0b, 6	; 11
+; =================================================================
+
+      ; NOTE!! This part of the code assumes MCUSR has already been cleared
+
+      ; Enable WDT, ~250 ms timeout (force a timeout to reset the AVR)
+      ldi         r17, _BV(WDE) | _BV(WDP2)     ; Load r17 with the value needed to set the desired Watchdog Configuration (WDCE = 0, not set!)
+    7eae:	1c e0       	ldi	r17, 0x0C	; 12
+                                                ; Write the WDE and Watchdog prescaler bits (WDP); System Reset Mode (WDE = 1) and ~250 ms timeout (WDP2 = 1)
+
+      rcall       set_watchdog_timer            ; Call the subroutine that sets the watchdog timer with the value loaded in r17
+    7eb0:	7e d0       	rcall	.+252    	; 0x7fae <set_watchdog_timer>
+
+00007eb2 <final_loop>:
+
+   ; for (;;);
+final_loop:
+   rjmp           final_loop                    ; keep looping here until the Watchdog timer kicks in,
+    7eb2:	ff cf       	rjmp	.-2      	; 0x7eb2 <final_loop>
+
+00007eb4 <USB_General_ISR>:
+      ; UENUM = 1;
+      ; UECONX |= (1 << EPEN);
+      ; UECFG0X = (1 << EPTYPE1) | (1 << EPTYPE0) | (1 << EPDIR);
+      ; UECFG1X = (1 << EPSIZE1) | (1 << EPSIZE0) | (1 << ALLOC);
+
+      std         Y+oUENUM, rONE                ; Select Endpoint 1
+    7eb4:	3a 8a       	std	Y+18, r3	; 0x12
+
+                                                ; Set Endpoint Enable Bit (EPEN), all other bits set to zero has no effect on UECONX
+      std         Y+oUECONX, rONE               ; Store the USB Endpoint Configuration Register (UECONX) with the value needed to enable Endpoint 1
+    7eb6:	3c 8a       	std	Y+20, r3	; 0x14
+
+      ldi         r16, (_BV(EPTYPE1) | _BV(EPTYPE0) | _BV(EPDIR)) ; Load r16 with the value to configure Endpoint 1
+    7eb8:	01 ec       	ldi	r16, 0xC1	; 193
+                                                                  ; Endpoint Type Bits (EPTYPE1:0); 11 to set as Interrupt Endpoint
+                                                                  ; Endpoint Direction Bit (EPDIR); set to configure IN direction
+
+      std         Y+oUECFG0X, r16               ; Store r16 to the USB Endpoint Configuration0 Register (UECFG0X);
+    7eba:	0d 8b       	std	Y+21, r16	; 0x15
+
+      ldi         r16, (_BV(EPSIZE1) | _BV(EPSIZE0) | _BV(ALLOC)) ; Load r16 with the value to configure Endpoint 1 (and also 0 below)
+    7ebc:	02 e3       	ldi	r16, 0x32	; 50
+                                                                  ; Endpoint Size Bits (EPSIZE2:0); 011 to set to 64 bytes
+                                                                  ; Endpoint Bank Bits (EPBK1:0); 00 to set One bank
+                                                                  ; Endpoint Allocation Bit (ALLOC); set to allocate the endpoint memory
+
+      std         Y+oUECFG1X, r16               ; Store r16 to the USB Endpoint Configuration1 Register (UECFG1X);
+    7ebe:	0e 8b       	std	Y+22, r16	; 0x16
+      ; UENUM = 0;
+      ; UECONX |= (1 << EPEN);
+      ; UECFG0X = 0;
+      ; UECFG1X = (1 << EPSIZE1) | (1 << EPSIZE0) | (1 << ALLOC);
+
+      std         Y+oUENUM, rZERO               ; Select Endpoint0
+    7ec0:	2a 8a       	std	Y+18, r2	; 0x12
+
+                                                ; Set Endpoint Enable Bit (EPEN), all other bits set to zero has no effect on UECONX
+      std         Y+oUECONX, rONE               ; Store the USB Endpoint Configuration Register (UECONX) with the value needed to enable Endpoint 0
+    7ec2:	3c 8a       	std	Y+20, r3	; 0x14
+                                                ; Endpoint Type Bits (EPTYPE1:0): 00 to set as Control Endpoint
+                                                ; Endpoint Direction Bit (EPDIR): clear to configure OUT direction; needed for Control Endpoint
+
+      ; SIZE OPTIMIZATION: r16 is already loaded with the required value while configuring endpoint 1 above
+
+      std         Y+oUECFG1X, r16               ; Store r16 to the USB Endpoint Configuration1 Register (UECFG1X);
+    7ec4:	0e 8b       	std	Y+22, r16	; 0x16
+
+      ; Enable "Received SETUP Interrupt"
+      ; UEIENX |= (1 << RXSTPE);
+      ldi         r16, _BV(RXSTPE)              ; Load r16 with the value to needed to enable an endpoint interrupt (EPINTx) when RXSTPI is sent.
+    7ec6:	08 e0       	ldi	r16, 0x08	; 8
+                                                ; Received SETUP Interrupt Enable Bit (RXSTPE) set to 1
+      std         Y+oUEIENX, r16                ; Store r16 to the USB Endpoint Interrupt Enable Register (UEIENX);
+    7ec8:	09 8f       	std	Y+25, r16	; 0x19
+
+00007eca <not_EORSTI>:
+
+not_EORSTI:
+      reti                                      ; Return from interrupt
+    7eca:	18 95       	reti
+
+00007ecc <USB_Endpoint_ISR>:
+      ; ldd         reg_wIndexH,       Y+oUEDATX  ; wIndexH
+      ; ldd         reg_wLengthL,      Y+oUEDATX  ; wLengthL
+      ; ldd         reg_wLengthH,      Y+oUEDATX  ; wLengthH
+
+      ; Shorter version
+      clr         XH                            ; Clear XH Register
+    7ecc:	bb 27       	eor	r27, r27
+      ldi         XL, 18                        ; Load XL Register with number 18 (this will be used to refer to r18)
+    7ece:	a2 e1       	ldi	r26, 0x12	; 18
+
+00007ed0 <load>:
+load: ldd         r0, Y+oUEDATX                 ; Load r0 with the value in the USB Endpoint Data Register (UEDATX)
+    7ed0:	0a 8c       	ldd	r0, Y+26	; 0x1a
+      st          X+, r0                        ; Store the value of r0 to the location pointed by X (r18), post increment X (X now points to r19)
+    7ed2:	0d 92       	st	X+, r0
+      cpi         XL, 18+8                      ; Compare XL with the location past the last byte that we need to read
+    7ed4:	aa 31       	cpi	r26, 0x1A	; 26
+      brne        load                          ; Jump back to 'load' if there are still bytes to read
+    7ed6:	e1 f7       	brne	.-8      	; 0x7ed0 <load>
+
+      ; Our response is based on data direction...
+      sbrc        reg_bmRequestType, 7          ; Skip the next instruction if bit 7 of bmRequestType is not set; for host to device (OUT) transaction, bit 7 is cleared
+    7ed8:	27 fd       	sbrc	r18, 7
+      rjmp        DEVICE_TO_HOST                ; If bit 7 of bmRequestType is set, this is a device to host (IN) transaction, jump to DEVICE_TO_HOST
+    7eda:	34 c0       	rjmp	.+104    	; 0x7f44 <DEVICE_TO_HOST>
+
+00007edc <HOST_TO_DEVICE>:
+
+; OUT transactions
+HOST_TO_DEVICE:
+
+      ; For OUT transactions, here we ONLY handle standard requests targeted for the device
+      cpi         reg_bmRequestType, 0x00       ; Compare r18 (bmRequestType) with value 0x00 (OUT Type Resquest, USB Standard Request, Recipient is the device)
+    7edc:	20 30       	cpi	r18, 0x00	; 0
+      breq        HANDLE_USB_STANDARD_DEVICE    ; If bmRequestType is 0x00, we know it's either a SET_ADDRESS or SET_CONFIGURATION request, so jump to HANDLE_USB_STANDARD_DEVICE
+    7ede:	39 f1       	breq	.+78     	; 0x7f2e <HANDLE_USB_STANDARD_DEVICE>
+
+      cpi         reg_bmRequestType, ((1 << 5) | (1 << 0))  ; Compare bmRequestType with the value that defines the request type and recipient we care about HID_SET_REPORT (REQTYPE_CLASS | REQREC_INTERFACE)
+    7ee0:	21 32       	cpi	r18, 0x21	; 33
+      brne        UNHANDLED_SETUP_REQUEST_1     ; jump to UNHANDLED_SETUP_REQUEST through a thunk if not equal
+    7ee2:	79 f5       	brne	.+94     	; 0x7f42 <UNHANDLED_SETUP_REQUEST_1>
+
+00007ee4 <HANDLE_USB_CLASS_INTERFACE>:
+                                                ; fallthrough to HANDLE_USB_CLASS_INTERFACE if equal
+HANDLE_USB_CLASS_INTERFACE:
+      cpi         reg_bRequest, 0x09            ; Compare bRequest with value 0x05 (HID_REQ_SetReport)
+    7ee4:	39 30       	cpi	r19, 0x09	; 9
+      brne        UNHANDLED_SETUP_REQUEST_1     ; If reg_bmRequestType is not 0x00 or bRequest is not 0x05 or 0x09, we don't handle those cases, so jump to UNHANDLED_SETUP_REQUEST
+    7ee6:	69 f5       	brne	.+90     	; 0x7f42 <UNHANDLED_SETUP_REQUEST_1>
+
+00007ee8 <SET_HID_REPORT>:
+      ; fallthrough to SET_HID_REPORT
+
+SET_HID_REPORT:
+
+      ; Acknowledge the SETUP packet and wait for command from the host
+      ldi         r17, ~(_BV(RXSTPI))           ; Clear the Received SETUP Interrupt Flag (RXSTPI) in r17
+    7ee8:	17 ef       	ldi	r17, 0xF7	; 247
+      rcall       clear_bit_and_wait_RXOUTI     ; This function loads r17 with value of UEINTX
+    7eea:	6f d0       	rcall	.+222    	; 0x7fca <clear_bit_and_wait_RXOUTI>
+
+00007eec <load_page_address>:
+
+load_page_address:
+      ldd         r30, Y+oUEDATX                ; Load r30 with LSB of page address
+    7eec:	ea 8d       	ldd	r30, Y+26	; 0x1a
+      ldd         r31, Y+oUEDATX                ; Load r31 with MSB of page address
+    7eee:	fa 8d       	ldd	r31, Y+26	; 0x1a
+
+00007ef0 <check_page_address>:
+
+check_page_address:
+      ; Protect against overwriting the bootloader - allow flash write only if the specified address is
+      ; less than the bootloader start address.  Only the high byte needs to be tested, because the
+      ; bootloader start is guaranteed to be on a 256 bytes boundary.
+      cpi         r31, hi8(reset_vector)        ; Compare high byte of page address against the high byte of the bootloader start addresss
+    7ef0:	fe 37       	cpi	r31, 0x7E	; 126
+      brcs        erase_page                    ; If the address is below the bootloader start, allow the flash write operation
+    7ef2:	20 f0       	brcs	.+8      	; 0x7efc <erase_page>
+      ; finish_hid_request would not just fail this SET_HID_REPORT request - apparently not reading the
+      ; OUT data properly results in the bootloader not responding to any subsequent USB requests too.
+      ; Instead of doing that, we run the normal flash write loop even if the address was bad, but set
+      ; the "disable flash write" bit, so that the actual flash write instructions will be skipped.
+      ; Bit 7 of reg_bRequest is used for that purpose - is is known to be 0 in the normal case.
+      sbr         reg_bRequest, _BV(7)          ; Set the "disable flash write" bit
+    7ef4:	30 68       	ori	r19, 0x80	; 128
+
+      ; If the address is out of the allowed range for flash write, it may be the special value for the
+      ; START_APPLICATION command (0xffff); check for that value in the shortest way possible.
+      adiw        r30, 1                        ; Increment the address to turn 0xffff into 0x0000
+    7ef6:	31 96       	adiw	r30, 0x01	; 1
+      brne        erase_page                    ; If the address was out of range and not 0xffff, jump to the regular flash write code
+    7ef8:	09 f4       	brne	.+2      	; 0x7efc <erase_page>
+                                                ; (which would just consume the OUT data to make USB work properly).
+      clt                                       ; Otherwise (the address was 0xffff) clear the BootLoaderActive flag (T flag in SREG),
+    7efa:	e8 94       	clt
+
+00007efc <erase_page>:
+                                                ; then fallthrough to the regular flash write code too.
+
+erase_page:
+
+      ldi         r17, (_BV(PGERS)|_BV(SPMEN))  ; load r17 with the value needed to erase the currently specified page
+    7efc:	13 e0       	ldi	r17, 0x03	; 3
+      rcall       do_SPM                        ; execute page erase (this function requires r17 to be loaded first with the right value for SPMCSR)
+    7efe:	6a d0       	rcall	.+212    	; 0x7fd4 <do_SPM>
+
+00007f00 <clear_current_page_byte_address>:
+
+clear_current_page_byte_address:
+      ldi         r16, (SPM_PAGESIZE/2)         ; load r16 with the number of words per page (128 bytes/2 = 64 words)
+    7f00:	00 e4       	ldi	r16, 0x40	; 64
+
+00007f02 <check_endpoint_for_more_data>:
+check_endpoint_for_more_data:
+
+      ; if (!(((uint16_t)UEBCHX << 8) | UEBCLX))
+      ; we just check for UEBCLX, we know we can't accept more than 130 bytes at a time (hid_report_descriptor)
+      ; ldd         r27, Y+oUEBCHX                ; load r27 with the value of USB Endpoint Byte Count High Register (UEBCHX)
+      ldd         r26, Y+oUEBCLX                ; load r26 with the value of USB Endpoint Byte Count Low Register (UEBCLX)
+    7f02:	ab 8d       	ldd	r26, Y+27	; 0x1b
+      ; or          r27, r27
+      or          r26, r26
+    7f04:	aa 2b       	or	r26, r26
+      brne        fill_page_buffer              ; if r26 is not zero, it means there's data in the endpoint which we can use to fill the page buffer, jump there
+    7f06:	11 f4       	brne	.+4      	; 0x7f0c <fill_page_buffer>
+
+      ; Acknowledge the OUT packet and wait for more data from the host
+      ldi         r17, ~(_BV(RXOUTI))           ; Clear the Received OUT Data Interrupt Flag (RXOUTI) in r17
+    7f08:	1b ef       	ldi	r17, 0xFB	; 251
+      rcall       clear_bit_and_wait_RXOUTI     ; This function loads r17 with value of UEINTX
+    7f0a:	5f d0       	rcall	.+190    	; 0x7fca <clear_bit_and_wait_RXOUTI>
+
+00007f0c <fill_page_buffer>:
+
+fill_page_buffer:                               ; There's data at the endpoint buffer, start fill_page_buffer sequence
+
+load_word_data:
+      ldd         r0, Y+oUEDATX                 ; Load r0 with LSB of data word
+    7f0c:	0a 8c       	ldd	r0, Y+26	; 0x1a
+      ldd         r1, Y+oUEDATX                 ; Load r1 with MSB of data word
+    7f0e:	1a 8c       	ldd	r1, Y+26	; 0x1a
+
+00007f10 <write_page_buffer>:
+
+write_page_buffer:
+      ldi         r17, _BV(SPMEN)               ; load r17 with the value needed to write the current word to the page buffer
+    7f10:	11 e0       	ldi	r17, 0x01	; 1
+      rcall       do_SPM                        ; execute page buffer write (this function requires r17 to be loaded first with the right value for SPMCSR)
+    7f12:	60 d0       	rcall	.+192    	; 0x7fd4 <do_SPM>
+
+00007f14 <increment_byte_address>:
+
+increment_byte_address:
+      subi        r30, -2                       ; Increment the current address by 2.
+    7f14:	ee 5f       	subi	r30, 0xFE	; 254
+                                                ; Only the low byte needs to be incremented, because the block start address must be page aligned,
+                                                ; therefore any carry to the high byte may happen only past the end of the block.
+
+      dec         r16                           ; decrement r16 (number of words per page)
+    7f16:	0a 95       	dec	r16
+      brne        check_endpoint_for_more_data  ; loop while r16 is not equal to SPM_PAGESIZE (128)
+    7f18:	a1 f7       	brne	.-24     	; 0x7f02 <check_endpoint_for_more_data>
+
+      ; Restore the page address in Z-Register
+      subi        r30, SPM_PAGESIZE             ; Move the address back to the start of page (again only the low byte needs to be changed).
+    7f1a:	e0 58       	subi	r30, 0x80	; 128
+
+00007f1c <write_page_to_flash>:
+
+write_page_to_flash:
+      ldi         r17, (_BV(PGWRT)|_BV(SPMEN))  ; load r17 with the value needed to commit the current page buffer to the flash
+    7f1c:	15 e0       	ldi	r17, 0x05	; 5
+      rcall       do_SPM                        ; execute page write to flash (this function requires r17 to be loaded first with the right value for SPMCSR)
+    7f1e:	5a d0       	rcall	.+180    	; 0x7fd4 <do_SPM>
+
+00007f20 <reenable_rww_section>:
+
+reenable_rww_section:
+      ldi         r17, (_BV(RWWSRE)|_BV(SPMEN)) ; load r17 with the value needed to reebable the rww section
+    7f20:	11 e1       	ldi	r17, 0x11	; 17
+      rcall       do_SPM                        ; execute re-enable rww section (this function requires r17 to be loaded first with the right value for SPMCSR)
+    7f22:	58 d0       	rcall	.+176    	; 0x7fd4 <do_SPM>
+
+00007f24 <finish_hid_request>:
+
+finish_hid_request:
+
+      ; Acknowledge the OUT packet and wait for TXINI (OK to transmit)
+      ldi         r17, ~(_BV(RXOUTI))           ; Clear the Received OUT Data Interrupt Flag (RXOUTI) in r17
+    7f24:	1b ef       	ldi	r17, 0xFB	; 251
+      rcall       clear_bit_and_wait_TXINI      ; This function loads r17 with value of UEINTX
+    7f26:	4c d0       	rcall	.+152    	; 0x7fc0 <clear_bit_and_wait_TXINI>
+
+      ; Clear Transmitter Ready Flag
+      ldi         r17, ~(_BV(TXINI))            ; Clear the Transmitter Ready Interrupt Flag (TXINI) in r17
+    7f28:	1e ef       	ldi	r17, 0xFE	; 254
+      std         Y+oUEINTX, r17                ; Store r17 to the USB Endpoint Interrupt Register (UEINTX)
+    7f2a:	19 8b       	std	Y+17, r17	; 0x11
+
+      rjmp        UNHANDLED_SETUP_REQUEST       ; Go to UNHANDLED_SETUP_REQUEST
+    7f2c:	37 c0       	rjmp	.+110    	; 0x7f9c <UNHANDLED_SETUP_REQUEST>
+
+00007f2e <HANDLE_USB_STANDARD_DEVICE>:
+
+
+HANDLE_USB_STANDARD_DEVICE:
+
+      ; Once we know we support the OUT transaction, we need to filter it based on the value in bRequest
+      cpi         reg_bRequest, 0x05            ; Compare bRequest with value 0x05 (REQ_SetAddress)
+    7f2e:	35 30       	cpi	r19, 0x05	; 5
+      breq        SET_ADDRESS                   ; jump to SET_ADDRESS
+    7f30:	21 f0       	breq	.+8      	; 0x7f3a <SET_ADDRESS>
+      cpi         reg_bRequest, 0x09            ; Compare bRequest with value 0x09 (REQ_SetConfiguration)
+    7f32:	39 30       	cpi	r19, 0x09	; 9
+      brne        UNHANDLED_SETUP_REQUEST_1     ; jump to UNHANDLED_SETUP_REQUEST through a thunk if not equal
+    7f34:	31 f4       	brne	.+12     	; 0x7f42 <UNHANDLED_SETUP_REQUEST_1>
+
+00007f36 <SET_CONFIGURATION>:
+#if defined(LED_ENABLED)
+      ; Turn LED on towards the end of enumeration (SET_CONFIGURATION is done after SET_ADDRESS)
+      ; TODO: If we ever have space, we could add a flag here to mark the fact that we have entered
+      ; this state, and turn the LED on at the end of the setup request. For now this is the best we
+      ; can do.
+      TURN_LED_ON
+    7f36:	5e 9a       	sbi	0x0b, 6	; 11
+
+      ; Optimization by "sigprof" that saves 2 bytes
+      ; Dirty trick: We don't need to do anything for SET_CONFIGURATION except process_Host2Device,
+      ; so we reuse the SET_ADDRESS code by making it reload the same value to UDADDR.
+
+      ldd         reg_wValueL, Y+oUDADDR        ; load the existing UDADDR value where the SET_ADDRESS code would expect the new address
+    7f38:	4c 85       	ldd	r20, Y+12	; 0x0c
+
+00007f3a <SET_ADDRESS>:
+      ; for the device set by the host to the USB Device Address Register (UDADDR); since the SET_ADDRESS
+      ; request is only executed once during enumeration, and because allowed address values are 1 through
+      ; 127 (7 LSBs), we don't need to care about the ADDEN bit (bit 7). We can also simply set the ADDEN
+      ; bit and store the value again in UDADDR to enable the USB Device Address.
+
+      std         Y+oUDADDR, reg_wValueL        ; Store wValueL to the USB Device Address Register (UDADDR)
+    7f3a:	4c 87       	std	Y+12, r20	; 0x0c
+
+      rcall       process_Host2Device           ; This function affects r17
+    7f3c:	3e d0       	rcall	.+124    	; 0x7fba <process_Host2Device>
+
+      ; EnableDeviceAddress
+      ; UDADDR |= (1 << ADDEN)
+      ori         reg_wValueL, _BV(ADDEN)       ; In order to save space, we simply OR the address value already in reg_wValueL (r20) with the ADDEN bit to enable the USB Address
+    7f3e:	40 68       	ori	r20, 0x80	; 128
+      std         Y+oUDADDR, reg_wValueL        ; Store reg_wValueL to the USB Device Address Register (UDADDR)
+    7f40:	4c 87       	std	Y+12, r20	; 0x0c
+
+00007f42 <UNHANDLED_SETUP_REQUEST_1>:
+
+UNHANDLED_SETUP_REQUEST_1:
+      rjmp        UNHANDLED_SETUP_REQUEST       ; Go to UNHANDLED_SETUP_REQUEST
+    7f42:	2c c0       	rjmp	.+88     	; 0x7f9c <UNHANDLED_SETUP_REQUEST>
+
+00007f44 <DEVICE_TO_HOST>:
+      ;  - 0x80 - IN Type Request, USB Standard Request, Recipient is the device
+      ;  - 0x81 - IN Type Request, USB Standard Request, Recipient is the interface
+      ; At this step it is known that bmRequestType >= 0x80, therefore checking for bmRequestType < 0x82
+      ; is enough to detect whether bmRequestType has one of the above values.
+
+      cpi         reg_bmRequestType, 0x82       ; Check whether bmRequestType is less than 0x82 (then it must be either 0x80 or 0x81)
+    7f44:	22 38       	cpi	r18, 0x82	; 130
+      brcc        UNHANDLED_SETUP_REQUEST       ; If bmRequestType >= 0x82, this request type is not handled here (it's not a GET_DESCRIPTOR request)
+    7f46:	50 f5       	brcc	.+84     	; 0x7f9c <UNHANDLED_SETUP_REQUEST>
+
+      cpi         reg_bRequest, 0x06            ; Compare bRequest with value 0x06 (REQ_GetDescriptor)
+    7f48:	36 30       	cpi	r19, 0x06	; 6
+      brne        UNHANDLED_SETUP_REQUEST       ; jump to UNHANDLED_SETUP_REQUEST if not equal
+    7f4a:	41 f5       	brne	.+80     	; 0x7f9c <UNHANDLED_SETUP_REQUEST>
+
+00007f4c <GET_DESCRIPTOR>:
+GET_DESCRIPTOR:
+
+      ; Just get the descriptor address into
+      ; [RAMPZ:]Z, and the length into r16
+
+      ldi         ZH, hi8(config_descriptor)    ; Load the high address part of config_descriptor into ZH
+    7f4c:	fe e7       	ldi	r31, 0x7E	; 126
+      ldi         ZL, lo8(config_descriptor)    ; Load the low address part of config_descriptor into ZL
+    7f4e:	e6 e0       	ldi	r30, 0x06	; 6
+      ldi         r16, 34                       ; Load r16 with length of config_descriptor (34 bytes)
+    7f50:	02 e2       	ldi	r16, 0x22	; 34
+      cpi         reg_wValueH, 0x02             ; Compare high byte of wValue with value 2;
+    7f52:	52 30       	cpi	r21, 0x02	; 2
+      breq        process_descriptor            ; If high byte of wValue is 0x02 (Configuration Descriptor), jump to handle that
+    7f54:	59 f0       	breq	.+22     	; 0x7f6c <process_descriptor>
+      adiw        r30, hid_descriptor - config_descriptor               ; Change Z to point to hid_descriptor
+    7f56:	72 96       	adiw	r30, 0x12	; 18
+      cpi         reg_wValueH, 0x21             ; Compare high byte of wValue with value 0x21 (HID Class HID Descriptor)
+    7f58:	51 32       	cpi	r21, 0x21	; 33
+
+00007f5a <process_single_descriptor>:
+      ; The following code will also be reused for the device descriptor - both of these descriptors
+      ; contain the size in the first byte, and getting the size from there saves one instruction.  This
+      ; trick cannot be applied to the Configuration Descriptor (which is actually a collection of
+      ; multiple descriptors) and the HID Report Descriptor (which has a completely different format).
+process_single_descriptor:
+      lpm         r16, Z                        ; Load r16 with the first byte of descriptor, which contains its length in bytes.
+    7f5a:	04 91       	lpm	r16, Z
+                                                ; This instruction does not change any flags in SREG, therefore it can be placed
+                                                ; between the compare and the corresponding conditional jump.
+      breq        process_descriptor            ; If the last compare result was equal, jump to return the descriptor data.
+    7f5c:	39 f0       	breq	.+14     	; 0x7f6c <process_descriptor>
+      adiw        r30, device_descriptor - hid_descriptor               ; Change Z to point to device_descriptor
+    7f5e:	76 96       	adiw	r30, 0x16	; 22
+      cpi         reg_wValueH, 0x01             ; Compare high byte of wValue with value 1;
+    7f60:	51 30       	cpi	r21, 0x01	; 1
+      breq        process_single_descriptor     ; If high byte of wValue is 0x01 (Device Descriptor), jump to handle that;
+    7f62:	d9 f3       	breq	.-10     	; 0x7f5a <process_single_descriptor>
+                                                ; reuse the code for hid_descriptor above.
+      adiw        r30, hid_report_descriptor - device_descriptor        ; Change Z to point to hid_report_descriptor
+    7f64:	72 96       	adiw	r30, 0x12	; 18
+      ldi         r16, 21                       ; Load r16 with length of hid_report_descriptor (21 bytes)
+    7f66:	05 e1       	ldi	r16, 0x15	; 21
+      cpi         reg_wValueH, 0x22             ; Compare high byte of wValue with value 0x22;
+    7f68:	52 32       	cpi	r21, 0x22	; 34
+      brne        UNHANDLED_SETUP_REQUEST       ; If high byte of wValue is NOT 0x22 (HID Class HID Report Descriptor), reject the setup request;
+    7f6a:	c1 f4       	brne	.+48     	; 0x7f9c <UNHANDLED_SETUP_REQUEST>
+
+00007f6c <process_descriptor>:
+                                                ; otherwise fallthrough to process_descriptor.
+
+process_descriptor:
+
+      ; Acknowledge the SETUP packet
+      ldi         r17, ~(_BV(RXSTPI))           ; Clear the Received SETUP Interrupt Flag (RXSTPI) in r17
+    7f6c:	17 ef       	ldi	r17, 0xF7	; 247
+      std         Y+oUEINTX, r17                ; Store r17 to the USB Endpoint Interrupt Register (UEINTX)
+    7f6e:	19 8b       	std	Y+17, r17	; 0x11
+
+00007f70 <verifyMaxDescriptorLength>:
+
+verifyMaxDescriptorLength:
+      cp          reg_wLengthL, r16             ; Compare the value in r24 (wLengthL) against the value in r16 (length of descriptor to send)
+    7f70:	80 17       	cp	r24, r16
+      brlo        send_descriptor               ; If the value in reg_wLengthL is smaller, use it to send the descriptor, jump to that tag
+    7f72:	08 f0       	brcs	.+2      	; 0x7f76 <send_descriptor>
+      mov         reg_wLengthL, r16             ; Otherwise, copy the value in r16 (which is the smaller of the two) to reg_wLengthL, and use that to send the descriptor
+    7f74:	80 2f       	mov	r24, r16
+
+00007f76 <send_descriptor>:
+
+send_descriptor:
+
+      ; Abort if RXSTPI is set
+      ldd         r17, Y+oUEINTX                ; Load r17 with the value in the USB Endpoint Interrupt Register (UEINTX);
+    7f76:	19 89       	ldd	r17, Y+17	; 0x11
+      sbrc        r17, RXSTPI                   ; Skip the next instruction if the Received SETUP Interrupt Flag (RXSTPI) is cleared
+    7f78:	13 fd       	sbrc	r17, 3
+      reti                                      ; Return if RXSTPI is set, we need to prioritize SETUP packets
+    7f7a:	18 95       	reti
+
+      ; NOTE: R17 already has the most current value of UEINTX, no need to load it again
+      sbrs        r17, RXOUTI                   ; Skip the next instruction if the Received OUT Data Interrupt Flag (RXOUTI) is set (there's an OUT packet from the host)
+    7f7c:	12 ff       	sbrs	r17, 2
+      sbrs        r17, TXINI                    ; Skip the next instruction if the Transmitter Ready Interrupt Flag (TXINI) is set (endpoint is ready to send data)
+    7f7e:	10 ff       	sbrs	r17, 0
+      rjmp        wait_finish_transfer          ; jump to finish_transfer
+    7f80:	06 c0       	rjmp	.+12     	; 0x7f8e <wait_finish_transfer>
+
+00007f82 <transfer_descriptor>:
+
+      ; ASSUMPTION!! reg_wLengthL already has the maximum valid length we can use to send the descriptor,
+      ; so we can just keep decrementing it until it reaches Zero
+transfer_descriptor:
+      lpm         r16, Z+                       ; Load r16 with the value pointed by the Z-Register (descriptor to send), post-increment Z-Register
+    7f82:	05 91       	lpm	r16, Z+
+      std         y+oUEDATX, r16                ; Store the value in r16 to the USB Endpoint Data Register (UEDATX)
+    7f84:	0a 8f       	std	Y+26, r16	; 0x1a
+      dec         reg_wLengthL                  ; Decrement the value in reg_wLengthL
+    7f86:	8a 95       	dec	r24
+      brne        transfer_descriptor           ; While reg_wLengthL is not Zero, loop back to transfer_descriptor
+    7f88:	e1 f7       	brne	.-8      	; 0x7f82 <transfer_descriptor>
+
+00007f8a <send_packet_done>:
+      ; We must now signal the packet to send is complete
+
+send_packet_done:
+
+      ; Clear Transmitter Ready Flag
+      ldi         r17, ~(_BV(TXINI))            ; Clear the Transmitter Ready Interrupt Flag (TXINI) in r17
+    7f8a:	1e ef       	ldi	r17, 0xFE	; 254
+      std         Y+oUEINTX, r17                ; Store r17 to the USB Endpoint Interrupt Register (UEINTX)
+    7f8c:	19 8b       	std	Y+17, r17	; 0x11
+
+00007f8e <wait_finish_transfer>:
+
+      ; Wait for the host to send an OUT packet (RXOUTI to assert), but abort if a SETUP packet is received
+wait_finish_transfer:
+      ldd         r17, Y+oUEINTX                ; Load r17 with the most current value in the USB Endpoint Interrupt Register (UEINTX);
+    7f8e:	19 89       	ldd	r17, Y+17	; 0x11
+      sbrc        r17, RXSTPI                   ; Skip the next instruction if the Received SETUP Interrupt Flag (RXSTPI) is cleared
+    7f90:	13 fd       	sbrc	r17, 3
+      reti                                      ; Return if RXSTPI is set, we need to prioritize SETUP packets
+    7f92:	18 95       	reti
+      sbrs        r17, RXOUTI                   ; Skip the next instruction if the Received OUT Data Interrupt Flag (RXOUTI) is set (there's already an OUT packet from the host)
+    7f94:	12 ff       	sbrs	r17, 2
+      rjmp        wait_finish_transfer          ; Loop back to finish_transfer if none of RXSTPI or RXOUTI flags are set
+    7f96:	fb cf       	rjmp	.-10     	; 0x7f8e <wait_finish_transfer>
+
+      ; Acknowledge the OUT packet
+      ldi         r17, ~(_BV(RXOUTI))           ; Clear the Received OUT Data Interrupt Flag (RXOUTI) in r17
+    7f98:	1b ef       	ldi	r17, 0xFB	; 251
+      std         Y+oUEINTX, r17                ; Store r17 to the USB Endpoint Interrupt Register (UEINTX)
+    7f9a:	19 8b       	std	Y+17, r17	; 0x11
+
+00007f9c <UNHANDLED_SETUP_REQUEST>:
+
+UNHANDLED_SETUP_REQUEST:
+
+      ; if (Endpoint_IsSETUPReceived())
+      ; (UEINTX & (1 << RXSTPI))
+      ldd         r16, Y+oUEINTX                 ; Load r16 with the value in the USB Endpoint Interrupt Register (UEINTX);
+    7f9c:	09 89       	ldd	r16, Y+17	; 0x11
+      sbrs        r16, RXSTPI                    ; Skip the next instruction if the Received SETUP Interrupt Flag (RXSTPI) is set; received SETUP packet?
+    7f9e:	03 ff       	sbrs	r16, 3
+      reti                                       ; Return if RXSTPI is not set, SETUP packet already handled
+    7fa0:	18 95       	reti
+
+      ; If we reach this part, the SETUP packet has not been handled, so we need to acknowledge it and request a stall
+
+      ; Acknowledge the SETUP packet
+      ldi         r17, ~(_BV(RXSTPI))           ; Clear the Received SETUP Interrupt Flag (RXSTPI) in r17
+    7fa2:	17 ef       	ldi	r17, 0xF7	; 247
+      std         Y+oUEINTX, r17                ; Store r17 to the USB Endpoint Interrupt Register (UEINTX)
+    7fa4:	19 8b       	std	Y+17, r17	; 0x11
+
+      ; STALL transaction
+
+      ; // Endpoint_StallTransaction();
+      ; UECONX |= (1 << STALLRQ);
+      ldd         r16, Y+oUECONX                ; Load r16 with the value in the USB Endpoint Configuration Register (UECONX)
+    7fa6:	0c 89       	ldd	r16, Y+20	; 0x14
+      ori         r16, _BV(STALLRQ)             ; Set the STALL Request Handshake Bit (STALLRQ) in r16
+    7fa8:	00 62       	ori	r16, 0x20	; 32
+      std         Y+oUECONX, r16                ; Store r16 to the USB Endpoint Configuration Register (UECONX)
+    7faa:	0c 8b       	std	Y+20, r16	; 0x14
+
+00007fac <EP_ISR_END>:
+
+
+EP_ISR_END:
+
+      reti                                      ; Return from interrupt
+    7fac:	18 95       	reti
+
+00007fae <set_watchdog_timer>:
+
+      ; IMPORTANT!! This function assumes the correct value for the WDTCSR register
+      ; configuration is already loaded onto r17; it also modifies r16.
+
+      ; always set YH to hi(EIO_BASE) before calling
+      ldi         YL, lo8(EIO_BASE)             ; Load YL with EIO_BASE (wdt_init)
+    7fae:	c0 e6       	ldi	r28, 0x60	; 96
+
+      wdr                                       ; Reset the Watchdog Timer
+    7fb0:	a8 95       	wdr
+
+      ldi         r16, _BV(WDCE) | _BV(WDE)     ; Load r16 with the value needed to "unlock" the Watchdog Timer Configuration
+    7fb2:	08 e1       	ldi	r16, 0x18	; 24
+                                                ; Write a logic one to the Watchdog Change Enable bit (WDCE) and Watchdog System Reset Enable (WDE)
+      std         Y+oWDTCSR, r16                ; Store r16 to the Watchdog Timer Control Register (WDTCSR)
+    7fb4:	08 83       	st	Y, r16
+
+      ; Load the desired configuration to the Watchdog Timer Control Register (WDTCSR)
+      std         Y+oWDTCSR, r17                ; Store r17 to the Watchdog Timer Control Register (WDTCSR)
+    7fb6:	18 83       	st	Y, r17
+
+      ret
+    7fb8:	08 95       	ret
+
+00007fba <process_Host2Device>:
+      ; changes here, make sure all requests that depend on this code don't need to be modified.
+
+      ; NOTE: All the functions here affect r17
+
+      ; Acknowledge the SETUP packet and wait for TXINI (OK to transmit)
+      ldi         r17, ~(_BV(RXSTPI))           ; Clear the Received SETUP Interrupt Flag (RXSTPI) in r17
+    7fba:	17 ef       	ldi	r17, 0xF7	; 247
+      rcall       clear_bit_and_wait_TXINI      ; This function loads r17 with value of UEINTX
+    7fbc:	01 d0       	rcall	.+2      	; 0x7fc0 <clear_bit_and_wait_TXINI>
+
+      ; Clear Transmitter Ready Flag and wait for TXINI (OK to transmit)
+      ldi         r17, ~(_BV(TXINI))            ; Clear the Transmitter Ready Interrupt Flag (TXINI) in r17
+    7fbe:	1e ef       	ldi	r17, 0xFE	; 254
+
+00007fc0 <clear_bit_and_wait_TXINI>:
+clear_bit_and_wait_TXINI:
+      std         Y+oUEINTX, r17                ; Store r17 to the USB Endpoint Interrupt Register (UEINTX)
+    7fc0:	19 8b       	std	Y+17, r17	; 0x11
+
+00007fc2 <wait_TXINI>:
+
+      ; NOTE: This function uses r17, we can use this fact to code other stuff
+      ; that happens before and after this functions is called
+
+      ; Wait for TXINI (OK to transmit)
+      ldd         r17, Y+oUEINTX                ; Load r17 with the value in the USB Endpoint Interrupt Register (UEINTX)
+    7fc2:	19 89       	ldd	r17, Y+17	; 0x11
+      sbrs        r17, TXINI                    ; Check the value of bit TXINI in r17, skip the next instruction if set
+    7fc4:	10 ff       	sbrs	r17, 0
+      rjmp        wait_TXINI                    ; Bit TXINI is not set, keep waiting
+    7fc6:	fd cf       	rjmp	.-6      	; 0x7fc2 <wait_TXINI>
+
+      ret                                       ; Return from call
+    7fc8:	08 95       	ret
+
+00007fca <clear_bit_and_wait_RXOUTI>:
+
+
+clear_bit_and_wait_RXOUTI:
+      std         Y+oUEINTX, r17                ; Store r17 to the USB Endpoint Interrupt Register (UEINTX)
+    7fca:	19 8b       	std	Y+17, r17	; 0x11
+
+00007fcc <wait_RXOUTI>:
+
+      ; NOTE: This function uses r17, we can use this fact to code other stuff
+      ; that happens before and after this functions is called
+
+      ; Wait for RXOUTI (OUT data received from the host)
+      ldd         r17, Y+oUEINTX                ; Load r17 with the value in the USB Endpoint Interrupt Register (UEINTX);
+    7fcc:	19 89       	ldd	r17, Y+17	; 0x11
+      sbrs        r17, RXOUTI                   ; Skip the next instruction if the Received OUT Data Interrupt Flag (RXOUTI) is set
+    7fce:	12 ff       	sbrs	r17, 2
+      rjmp        wait_RXOUTI                   ; Bit RXOUTI not set, keep waiting
+    7fd0:	fd cf       	rjmp	.-6      	; 0x7fcc <wait_RXOUTI>
+
+      ret                                       ; Return from call
+    7fd2:	08 95       	ret
+
+00007fd4 <do_SPM>:
+
+      ; NOTE: This function assumes r17 already has the correct value for the SPMCSR register, depending on the
+      ; desired SPM operation
+      ; NOTE: If bit 7 of reg_bRequest is set to 1, the actual SPM instruction will not be executed
+      ; (the wait loop will still run, but should just complete immediately).
+      out         _SFR_IO_ADDR(SPMCSR), r17     ; store value in r17 to the Store Program Memory Control and Status Register (SPMCSR)
+    7fd4:	17 bf       	out	0x37, r17	; 55
+      sbrs        reg_bRequest, 7               ; Skip the actual flash operation if the "disable flash write" bit is set.
+    7fd6:	37 ff       	sbrs	r19, 7
+                                                ; This is apparently safe, because the SPM instruction must be executed within 4 cycles after setting SPMEN,
+                                                ; and the sbrs instruction takes just 1 cycle when not skipping.
+      spm                                       ; execute spm instruction based on the value loaded to SPMCSR
+    7fd8:	e8 95       	spm
+
+00007fda <wait_SPM>:
+
+wait_SPM:
+      in          r17, _SFR_IO_ADDR(SPMCSR)     ; load r17 with value of Store Program Memory Control and Status Register (SPMCSR)
+    7fda:	17 b7       	in	r17, 0x37	; 55
+      sbrc        r17, SPMEN                    ; check value of SPMEN bit
+    7fdc:	10 fd       	sbrc	r17, 0
+      rjmp        wait_SPM                      ; loop while SPMEN is set
+    7fde:	fd cf       	rjmp	.-6      	; 0x7fda <wait_SPM>
+
+      ret                                       ; Return from call
+    7fe0:	08 95       	ret
