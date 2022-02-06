@@ -1,0 +1,16 @@
+#!/bin/sh -ex
+# vim:se sw=2 ts=2 sts=2 et ai:
+# Script to build nanoBoot
+
+# Teensy 2.0 compatible board
+#   -- LED is ON with ATmega32u4 PIN D6 HIGH
+#define LED_BIT           6
+#define LED_CONF          DDRD
+#define LED_PORT          PORTD
+#define LED_ACTIVE_LEVEL  1
+DEFS="LEDDEFS=-DLED_ENABLED -DLED_BIT=6 -DLED_CONF=DDRD -DLED_PORT=PORTD -DLED_ACTIVE_LEVEL=1 -DAT90USB1286"
+make clean
+make MCU=at90usb1286 "$DEFS"
+mv -f nanoBoot.hex nanoBoot-teensypp.hex
+
+
