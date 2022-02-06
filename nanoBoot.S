@@ -573,7 +573,19 @@ run_bootloader:
       ori         r16, _BV(USBE)                ; The right value of USBCON is already in r16, just set the USB macro Enable Bit (USBE)
       std         Y+oUSBCON, r16                ; Store r16 to the USB Configuration Register (USBCON)
 
-      ; Set PLL Output Frequency to 48MHz
+#if defined(AT90USB1286)
+      ; Set PLL Output Frequency to 48MHz (The PLL requires a 2MHz input for AT90USB1286 thus 1/8)
+
+      ; Set proper PLL clock for 16 MHz system clock
+      ldi         r17, (_BV(PLLP2) | _BV(PLLP0)) ; Load r17 with the value needed to set the PLL Lock Frequency to 48Mz
+      out         _SFR_IO_ADDR(PLLCSR), r17     ; Store r17 to the PLL Control and Status Register (PLLCSR)
+
+      ; Enable USB PLL (USB_PLL_On)
+      ldi         r17, (_BV(PLLP2) | _BV(PLLP0) | _BV(PLLE)) ; Load r17 with the value needed to set the PLL Lock Frequency to 48Mz and start
+      out         _SFR_IO_ADDR(PLLCSR), r17     ; Store r17 to the PLL Control and Status Register (PLLCSR)
+
+#else
+      ; Set PLL Output Frequency to 48MHz (The PLL requires a 8MHz input for ATmega32u4 thus 1/2 on 16 MHz platform)
       ; PLLFRQ = (1 << PDIV2);
       ldi         r17, _BV(PDIV2)               ; Load r17 with the value needed to set the PLL Lock Frequency to 48MHz (only PDIV2 bit set to 1)
                                                 ; The PLL Input Multiplexer (PMUX) bit is set to 0 because the PLL input is connected to the PLL Prescaler, which has the Primary System Clock as source
@@ -594,6 +606,8 @@ run_bootloader:
 
       ldi         r17, (_BV(PINDIV) | _BV(PLLE)); Load r17 with the value needed to enable the PLL, set PLL Enable bit (PLLE), we are also setting PINDIV to keep the PLL input prescaler configuration
       out         _SFR_IO_ADDR(PLLCSR), r17     ; Store r17 to the PLL Control and Status Register (PLLCSR)
+
+#endif
 
       ; Wait for PLL Lock Detector to assert
       ; while (!(USB_PLL_IsReady()));
