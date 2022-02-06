@@ -891,7 +891,7 @@ write_page_buffer:
 
 increment_byte_address:
 #if defined(AT90USB1286)
-      sbiw        r30:r31, -2                   ; Increment the current address by 2.
+      sbiw        r30, -2                   ; Increment the current address by 2.
 #else
       subi        r30, -2                       ; Increment the current address by 2.
 #endif
@@ -903,7 +903,7 @@ increment_byte_address:
 
       ; Restore the page address in Z-Register
 #if defined(AT90USB1286)
-      sbiw        r30:r31, SPM_PAGESIZE         ; Move the address back to the start of page (again only the low byte needs to be changed).
+      sbiw        r30, SPM_PAGESIZE         ; Move the address back to the start of page (again only the low byte needs to be changed).
 #else
       subi        r30, SPM_PAGESIZE             ; Move the address back to the start of page (again only the low byte needs to be changed).
 #endif
