@@ -375,7 +375,11 @@ hid_report_descriptor:
    .byte       0x15, 0x00        //   Logical Minimum (0)
    .byte       0x25, 0xFF        //   Logical Maximum (255)
    .byte       0x75, 0x08        //   Report Size (8)
+#if defined(AT90USB1286)
+   .byte       0x96, 0x82, 0x00  //   Report Count (258) -> SPM_PAGESIZE (256 bytes) + 2
+#else
    .byte       0x96, 0x82, 0x00  //   Report Count (130) -> SPM_PAGESIZE (128 bytes) + 2
+#endif
    .byte       0x91, 0x02        //   Output (Data,Var,Abs,No Wrap,Linear,Preferred State,No Null Position,Non-volatile)
    .byte       0xC0              // End Collection
 hid_report_descriptor_end:
@@ -858,7 +862,7 @@ erase_page:
       rcall       do_SPM                        ; execute page erase (this function requires r17 to be loaded first with the right value for SPMCSR)
 
 clear_current_page_byte_address:
-      ldi         r16, (SPM_PAGESIZE/2)         ; load r16 with the number of words per page (128 bytes/2 = 64 words)
+      ldi         r16, (SPM_PAGESIZE/2)         ; load r16 with the number of words per page (128 bytes/2 = 64 words for ATmega32u4, 128 words for AT90USB1286)
                                                 ; r16 will be decremented for every word (2 bytes) we write to the page buffer
 
 check_endpoint_for_more_data:
@@ -886,15 +890,23 @@ write_page_buffer:
       rcall       do_SPM                        ; execute page buffer write (this function requires r17 to be loaded first with the right value for SPMCSR)
 
 increment_byte_address:
+#if defined(AT90USB1286)
+      sbiw        r30:r31, -2                   ; Increment the current address by 2.
+#else
       subi        r30, -2                       ; Increment the current address by 2.
+#endif
                                                 ; Only the low byte needs to be incremented, because the block start address must be page aligned,
                                                 ; therefore any carry to the high byte may happen only past the end of the block.
 
       dec         r16                           ; decrement r16 (number of words per page)
-      brne        check_endpoint_for_more_data  ; loop while r16 is not equal to SPM_PAGESIZE (128)
+      brne        check_endpoint_for_more_data  ; loop while r16 is not equal to SPM_PAGESIZE (ATmega32u4: 128) (AT90USB1286: 256 byte)
 
       ; Restore the page address in Z-Register
+#if defined(AT90USB1286)
+      sbiw        r30:r31, SPM_PAGESIZE         ; Move the address back to the start of page (again only the low byte needs to be changed).
+#else
       subi        r30, SPM_PAGESIZE             ; Move the address back to the start of page (again only the low byte needs to be changed).
+#endif
 
 write_page_to_flash:
       ldi         r17, (_BV(PGWRT)|_BV(SPMEN))  ; load r17 with the value needed to commit the current page buffer to the flash
