@@ -133,10 +133,10 @@
 ; R29 =  0 (common constant, use instead of traditional R1 since YH is always 0 within bootloader)
 ; R2     unused
 ; R3  =  1 (common constant, number is used constantly in the code)
-; R4  =  copy of MCUSR (MCU Status Register)
 ; R4  ... R15  unused
 ; R16          local variable
 ; R17          local variable
+; R18          on startup, copy of MCUSR (MCU Status Register)
 ; R18 ... R25  local array variable used by USB
 ; R26, R27     X index register
 ; R28, R29      index register
@@ -152,7 +152,7 @@
 
 #define rZERO              r29
 #define rONE               r3
-#define rMCUSR             r4
+#define rMCUSR             r18
 
 ; #define rMagicBootKeyL     r26    ; currently not used - XL
 ; #define rMagicBootKeyH     r27    ; currently not used - XH
@@ -389,7 +389,8 @@ string_descriptor_0:
 string_descriptor_1:
    .byte       string_descriptor_1_end - string_descriptor_1    // bLength         -- Size of the Descriptor in Bytes (4 bytes)
    .byte       3                                                // bDescriptorType -- String Descriptor (0x03)
-   .word       'n,'a,'n,'o,'B,'t                                // Each character eats 2 bytes (save 4 bytes)
+;   .word       'n,'a,'n,'o,'B,'t                                // Each character eats 2 bytes (save 4 bytes)
+   .word       'n,'n,'B,'t                                // Each character eats 2 bytes (save 4 bytes)
 string_descriptor_1_end:
 
 descriptor_table:
@@ -439,8 +440,30 @@ main:
 
       rcall       set_watchdog_timer            ; Call the subroutine that sets the watchdog timer with the value loaded in r17
 
+#if 1
+; MCUSR can hold the following flags:
+;   PORF  0x01 ... reset cause was power-on
+;   EXTRF 0x02 ... reset cause was external interrupt
+;   BORF  0x04 ... reset cause was brownout
+;   WDRF  0x08 ... reset cause was Watchdog interrupt
+;   JTRF  0x10 ... reset cause was JTAG
+;   USBRF 0x20 ... reset cause was USB (JTAG?)
+; Only boot into the bootloader if none of these (except EXTRF) is set.
+; That allows both a boot with Reset or by jumping into the bootloader from the aplication
+; 
+; check_reset_flags:
+     andi         rMCUSR, 0x3d
+     breq         run_bootloader
+;   instead of
+
+#else
+
 ; check_reset_flags:
       sbrs        rMCUSR, EXTRF                 ; Skip the next instruction if EXTRF is set (if External Reset Flag, skip next instruction, go to run_bootloader)
+
+#endif
+
+; since that means 2 additional bytes, it won't work for a config with active low LED
 
 run_application:                                ; We get here if the cause of the reset was anything but an Extenal Reset (push-button)
       jmp         0                             ; Simply jump to 0x0000 (application) IMPORTANT NOTE!! This CANNOT be an 'rjmp'!!
@@ -480,7 +503,7 @@ run_bootloader:
 
 ; =================================================================
 ; = Setup Stack
-; = UNNECESARY SINCE ATMEGA32U4 DOES THIS AUTOMATICALLY!
+; = UNNECESSARY SINCE ATMEGA32U4 DOES THIS AUTOMATICALLY!
 ; =================================================================
 
 ; Set up the stack (TODO: is this necessary?), we won't be using the stack anyway
@@ -492,7 +515,7 @@ run_bootloader:
 
 ; =================================================================
 ; = Setup System Clock (16 MHz XTAL)
-; = UNNECESARY SINCE FUSES TAKE CARE OF THIS!!
+; = UNNECESSARY SINCE FUSES TAKE CARE OF THIS!!
 ; =================================================================
 
       ; lds         r16, CLKSEL0                  ; Load the value of Clock Selection Register 0 (CLKSEL0) to r16
