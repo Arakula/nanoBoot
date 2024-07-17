@@ -8,7 +8,7 @@ The name *nanoBoot* comes from the fact that the compiled source fits in the sma
 
 It's very likely that a few sections can be rewritten to make it even smaller, and the ultimate goal is to support EEPROM programming as well, although that would require changes to the host code.
 
-In contrast to Osamu Aoki's version, this one doesn't only stay in the bootloader if the boot was triggered by an External Reset, but also if no other boot flag is set - i.e., if jumped to from the application. This has the additional benefit that if *only* the boot loader is flashed, the device doesn't continually reboot, but enters the boot loader after having tried to run the non-existent application.
+In contrast to Osamu Aoki's version, this one doesn't only stay in the bootloader if the boot was triggered by an External Reset, but also if no other boot flag is set - i.e., if jumped to from the application. This has the additional benefit that if *only* the boot loader is flashed, the device doesn't continually reboot, but enters the bootloader instead after having tried to run the non-existent application.
 
 The current version (2024-07-17) is supported as-is in the 'hid_bootloader_loader.py' script that ships with [LUFA-151115](https://github.com/abcminiuser/lufa/releases/tag/LUFA-151115) or even newer one.
 
