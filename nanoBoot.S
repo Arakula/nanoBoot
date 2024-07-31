@@ -463,7 +463,7 @@ main:
 
 #endif
 
-; since that means 2 additional bytes, it won't work for a config with active low LED
+; since that means 2 additional bytes, it won't work for a config with active low LED without shortening the name again
 
 run_application:                                ; We get here if the cause of the reset was anything but an Extenal Reset (push-button)
       jmp         0                             ; Simply jump to 0x0000 (application) IMPORTANT NOTE!! This CANNOT be an 'rjmp'!!
